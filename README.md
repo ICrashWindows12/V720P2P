@@ -28,7 +28,8 @@ SERVER_PORT = ""
 ```
 
 # Running the script
-It requires websockets so run `
+It requires websockets so run 
+`
 pip install websockets
 `
 
