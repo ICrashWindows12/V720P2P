@@ -57,3 +57,4 @@ python v720wss.py
 - This can probably use any user agent header so input as you wish, default is macOS.
 - You cannot access any other cameras you don't have access to unless they share it with you.
 - Only one person can view at a time unless you create a server which then broadcasts this
+- Very bad quality, only 10fps just like the app, don't expect too much. and normally it is 640x480 but this is just stretched out a little bit
