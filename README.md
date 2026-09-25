@@ -5,6 +5,7 @@ And the cameras I am referring to are https://naxclow.com
 
 # Example
 <img width="964" height="624" alt="Screenshot 2026-09-26 at 1 03 33 am" src="https://github.com/user-attachments/assets/4391003d-a7f0-4789-bfca-221a7fd0839d" />
+
 # Editing the file
 You can open this up in a text editor or a terminal text editor and paste everything
 
