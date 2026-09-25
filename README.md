@@ -56,3 +56,4 @@ python v720wss.py
 - This script may not work in the future so I will update it if it changes how they stream it anytime soon.
 - This can probably use any user agent header so input as you wish, default is macOS.
 - You cannot access any other cameras you don't have access to unless they share it with you.
+- Only one person can view at a time unless you create a server which then broadcasts this
