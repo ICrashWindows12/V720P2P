@@ -4,7 +4,12 @@ A python script that will pull your V720 camera feed from the naxclow p2p server
 And the cameras I am referring to are https://naxclow.com
 
 # Example
+Running on macOS
 <img width="964" height="624" alt="Screenshot 2026-09-26 at 1 03 33 am" src="https://github.com/user-attachments/assets/4391003d-a7f0-4789-bfca-221a7fd0839d" />
+
+Running on termux (android) with openbox window manager, running on aterm terminal
+<img width="1092" height="888" alt="Screenshot 2026-09-26 at 3 04 32 am" src="https://github.com/user-attachments/assets/d2b8c828-2dec-4c78-8161-d5eacb8c6728" />
+
 
 # Editing the file
 You can open this up in a text editor or a terminal text editor and paste everything
