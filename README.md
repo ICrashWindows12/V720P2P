@@ -16,7 +16,7 @@ You can open this up in a text editor or a terminal text editor and paste everyt
 8. Click payload then you will see device ID, token, server IP and Port
 9. Input into the v720wss.py in the blank fields
 
-```
+`
 DEVICE_ID = ""
 
 # This is the CAMERA/P2P token (tarPwd), NOT the V720 account JWT.
@@ -25,13 +25,13 @@ CAMERA_TOKEN = ""
 SERVER_IP = ""
 SERVER_PORT = ""
 
-```
+`
 
 # Running the script
 It requires websockets so run 
-`
+```
 pip install websockets
-`
+```
 
 Run with 
 ```
