@@ -41,6 +41,8 @@ Linux
 ```
 apt install ffmpeg
 ```
+
+Run the script with
 ```
 python v720wss.py
 ```
