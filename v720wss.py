@@ -22,6 +22,7 @@ CAMERA_TOKEN = ""
 
 SERVER_IP = ""
 SERVER_PORT = ""
+
 WSS_BASE = "wss://h5v720app.naxclowyun.com/p2p/live2"
 
 
@@ -42,8 +43,6 @@ WSS_URL = WSS_BASE + "?" + urlencode(params)
 # ============================================================
 # V720 PACKET TYPES
 #
-# From the V720 JavaScript:
-#
 # 0   = JSON/status
 # 1   = JPEG video
 # 4   = compressed audio
@@ -60,12 +59,6 @@ TYPE_COMMAND = 301
 
 # ============================================================
 # V720 PACKET CREATION
-#
-# Browser:
-#
-# new ArrayBuffer(4 + payload.length)
-# DataView.setUint32(0, type, true)
-# payload starts at byte 4
 # ============================================================
 
 def make_packet(packet_type, payload):
@@ -85,14 +78,11 @@ def start_ffplay():
     command = [
         "ffplay",
         "-loglevel", "warning",
-
         # Reduce buffering.
         "-fflags", "nobuffer",
         "-flags", "low_delay",
-
         # JPEG sequence.
         "-f", "mjpeg",
-
         # Read from stdin.
         "-i", "pipe:0",
     ]
@@ -114,22 +104,18 @@ def start_ffplay():
 
 async def main():
 
-    print("==============================================")
-    print(" V720 WSS -> FFplay")
-    print("==============================================")
-    print()
-
-    print("Device ID :", DEVICE_ID)
-    print("Server    :", SERVER_IP)
-    print("Port      :", SERVER_PORT)
-    print("WSS URL   :", WSS_BASE)
-    print()
-
-    # ========================================================
-    # RECONNECT LOOP
-    # ========================================================
-
     while True:
+
+        print("==============================================")
+        print(" V720 WSS -> FFplay")
+        print("==============================================")
+        print()
+
+        print("Device ID :", DEVICE_ID)
+        print("Server    :", SERVER_IP)
+        print("Port      :", SERVER_PORT)
+        print("WSS URL   :", WSS_BASE)
+        print()
 
         print("Connecting...")
         print()
@@ -138,14 +124,25 @@ async def main():
         first_frame_saved = False
         frame_count = 0
         last_keepalive = time.monotonic()
+
+        # ----------------------------------------------------
+        # NEW: watchdog state
+        #
+        # Every received WebSocket message resets last_rx.
+        # If absolutely nothing is received for 15 seconds,
+        # the watchdog closes the connection so the outer
+        # loop reconnects.
+        # ----------------------------------------------------
+
         last_rx = time.monotonic()
-        reconnecting = False
+        watchdog_task = None
+        watchdog_triggered = False
 
         try:
 
-            # ------------------------------------------------
+            # ----------------------------------------------------
             # Connect to the exact URL the browser constructs.
-            # ------------------------------------------------
+            # ----------------------------------------------------
 
             async with websockets.connect(
                 WSS_URL,
@@ -156,11 +153,9 @@ async def main():
                     "Chrome/153.0.0.0 Safari/537.36"
                 ),
                 max_size=None,
-
                 # Keep the websocket alive at the protocol level.
                 ping_interval=20,
                 ping_timeout=20,
-
             ) as ws:
 
                 print("CONNECTED")
@@ -188,372 +183,366 @@ async def main():
                 print("Waiting for V720 packets...")
                 print()
 
-                # =================================================
-                # WATCHDOG
-                #
-                # If absolutely nothing is received for 5 seconds,
-                # reconnect the entire connection.
-                # =================================================
+                # ------------------------------------------------
+                # NEW: 15-second RX watchdog
+                # ------------------------------------------------
 
-                async def signal_watchdog():
+                async def rx_watchdog():
 
                     nonlocal last_rx
-                    nonlocal reconnecting
+                    nonlocal watchdog_triggered
 
                     while True:
 
                         await asyncio.sleep(1)
 
-                        if time.monotonic() - last_rx >= 5:
+                        if time.monotonic() - last_rx >= 15:
 
-                            if not reconnecting:
+                            watchdog_triggered = True
 
-                                reconnecting = True
+                            print()
+                            print("Signal lost, reconnecting...")
 
-                                print()
-                                print("Signal lost, reconnecting...")
-                                print()
-
-                                try:
-                                    await ws.close()
-                                except Exception:
-                                    pass
+                            try:
+                                await ws.close()
+                            except Exception:
+                                pass
 
                             return
 
                 watchdog_task = asyncio.create_task(
-                    signal_watchdog()
+                    rx_watchdog()
                 )
 
-                try:
+                # ------------------------------------------------
+                # Start ffplay only once we actually receive video.
+                # ------------------------------------------------
+
+                async for message in ws:
 
                     # ------------------------------------------------
-                    # Receive packets.
+                    # NEW: ANY received WebSocket message resets
+                    # the 15-second watchdog.
                     # ------------------------------------------------
 
-                    async for message in ws:
+                    last_rx = time.monotonic()
 
-                        # Every received message resets the
-                        # 5-second signal-loss timer.
-                        last_rx = time.monotonic()
+                    # ==================================================
+                    # TEXT MESSAGE
+                    # ==================================================
 
-                        # ==================================================
-                        # TEXT MESSAGE
-                        # ==================================================
-
-                        if isinstance(message, str):
-
-                            print(
-                                "RX TEXT:",
-                                repr(message)
-                            )
-
-                            continue
-
-
-                        # ==================================================
-                        # BINARY MESSAGE
-                        # ==================================================
-
-                        if not isinstance(message, bytes):
-
-                            print(
-                                "RX UNKNOWN:",
-                                type(message)
-                            )
-
-                            continue
-
-
-                        if len(message) < 4:
-
-                            print(
-                                "RX SHORT PACKET:",
-                                len(message),
-                                "bytes"
-                            )
-
-                            continue
-
-
-                        # --------------------------------------------------
-                        # Read little-endian uint32 packet type.
-                        # --------------------------------------------------
-
-                        packet_type = struct.unpack_from(
-                            "<I",
-                            message,
-                            0,
-                        )[0]
-
-                        payload = message[4:]
-
-
-                        # ==================================================
-                        # STATUS / JSON
-                        # ==================================================
-
-                        if packet_type == TYPE_STATUS:
-
-                            try:
-
-                                text = payload.decode(
-                                    "utf-8",
-                                    errors="replace",
-                                )
-
-                                print(
-                                    "RX STATUS:",
-                                    text
-                                )
-
-                            except Exception as e:
-
-                                print(
-                                    "RX STATUS decode error:",
-                                    repr(e)
-                                )
-
-                            continue
-
-
-                        # ==================================================
-                        # JPEG VIDEO
-                        # ==================================================
-
-                        if packet_type == TYPE_JPEG:
-
-                            frame_count += 1
-
-                            print(
-                                f"RX JPEG #{frame_count}: "
-                                f"{len(payload):,} bytes"
-                            )
-
-                            # ------------------------------------------------
-                            # Verify that this actually looks like JPEG.
-                            #
-                            # JPEG normally starts FF D8 and ends FF D9.
-                            # ------------------------------------------------
-
-                            if len(payload) >= 2:
-
-                                start = payload[:2].hex(" ")
-                                end = payload[-2:].hex(" ")
-
-                                print(
-                                    "    JPEG header:",
-                                    start,
-                                    "tail:",
-                                    end
-                                )
-
-
-                            # ------------------------------------------------
-                            # Save the first frame.
-                            # ------------------------------------------------
-
-                            if not first_frame_saved:
-
-                                with open(
-                                    "first_frame.jpg",
-                                    "wb",
-                                ) as f:
-
-                                    f.write(payload)
-
-                                first_frame_saved = True
-
-                                print(
-                                    "    Saved first frame as "
-                                    "first_frame.jpg"
-                                )
-
-
-                            # ------------------------------------------------
-                            # Start ffplay after the first real frame arrives.
-                            # ------------------------------------------------
-
-                            if ffplay is None:
-
-                                ffplay = start_ffplay()
-
-
-                            # ------------------------------------------------
-                            # Feed JPEG directly into ffplay.
-                            # ------------------------------------------------
-
-                            try:
-
-                                ffplay.stdin.write(payload)
-                                ffplay.stdin.flush()
-
-                            except (
-                                BrokenPipeError,
-                                OSError,
-                            ):
-
-                                print()
-                                print(
-                                    "ffplay closed its input."
-                                )
-
-                                break
-
-                            continue
-
-
-                        # ==================================================
-                        # AUDIO
-                        # ==================================================
-
-                        if packet_type == TYPE_AUDIO:
-
-                            print(
-                                "RX AUDIO:",
-                                len(payload),
-                                "bytes"
-                            )
-
-                            # We deliberately ignore audio for now.
-
-                            continue
-
-
-                        # ==================================================
-                        # PCM AUDIO
-                        # ==================================================
-
-                        if packet_type == TYPE_PCM:
-
-                            print(
-                                "RX PCM:",
-                                len(payload),
-                                "bytes"
-                            )
-
-                            # We deliberately ignore audio for now.
-
-                            continue
-
-
-                        # ==================================================
-                        # COMMAND RESPONSE
-                        # ==================================================
-
-                        if packet_type == TYPE_COMMAND:
-
-                            try:
-
-                                text = payload.decode(
-                                    "utf-8",
-                                    errors="replace",
-                                )
-
-                                print(
-                                    "RX COMMAND:",
-                                    text
-                                )
-
-                            except Exception as e:
-
-                                print(
-                                    "RX COMMAND decode error:",
-                                    repr(e)
-                                )
-
-                            continue
-
-
-                        # ==================================================
-                        # UNKNOWN PACKET
-                        # ==================================================
+                    if isinstance(message, str):
 
                         print(
-                            "RX UNKNOWN PACKET:",
-                            "type=",
-                            packet_type,
-                            "length=",
+                            "RX TEXT:",
+                            repr(message)
+                        )
+
+                        continue
+
+                    # ==================================================
+                    # BINARY MESSAGE
+                    # ==================================================
+
+                    if not isinstance(message, bytes):
+
+                        print(
+                            "RX UNKNOWN:",
+                            type(message)
+                        )
+
+                        continue
+
+                    if len(message) < 4:
+
+                        print(
+                            "RX SHORT PACKET:",
+                            len(message),
+                            "bytes"
+                        )
+
+                        continue
+
+                    # --------------------------------------------------
+                    # Read little-endian uint32 packet type.
+                    # --------------------------------------------------
+
+                    packet_type = struct.unpack_from(
+                        "<I",
+                        message,
+                        0,
+                    )[0]
+
+                    payload = message[4:]
+
+                    # ==================================================
+                    # STATUS / JSON
+                    # ==================================================
+
+                    if packet_type == TYPE_STATUS:
+
+                        try:
+
+                            text = payload.decode(
+                                "utf-8",
+                                errors="replace",
+                            )
+
+                            print(
+                                "RX STATUS:",
+                                text
+                            )
+
+                        except Exception as e:
+
+                            print(
+                                "RX STATUS decode error:",
+                                repr(e)
+                            )
+
+                        continue
+
+                    # ==================================================
+                    # JPEG VIDEO
+                    # ==================================================
+
+                    if packet_type == TYPE_JPEG:
+
+                        frame_count += 1
+
+                        print(
+                            f"RX JPEG #{frame_count}: "
+                            f"{len(payload):,} bytes"
+                        )
+
+                        # ------------------------------------------------
+                        # Verify that this actually looks like JPEG.
+                        #
+                        # JPEG normally starts FF D8 and ends FF D9.
+                        # ------------------------------------------------
+
+                        if len(payload) >= 2:
+
+                            start = payload[:2].hex(" ")
+                            end = payload[-2:].hex(" ")
+
+                            print(
+                                "    JPEG header:",
+                                start,
+                                "tail:",
+                                end
+                            )
+
+                        # ------------------------------------------------
+                        # Save the first frame.
+                        # ------------------------------------------------
+
+                        if not first_frame_saved:
+
+                            with open(
+                                "first_frame.jpg",
+                                "wb",
+                            ) as f:
+
+                                f.write(payload)
+
+                            first_frame_saved = True
+
+                            print(
+                                "    Saved first frame as "
+                                "first_frame.jpg"
+                            )
+
+                        # ------------------------------------------------
+                        # Start ffplay after the first real frame arrives.
+                        # ------------------------------------------------
+
+                        if ffplay is None:
+
+                            ffplay = start_ffplay()
+
+                        # ------------------------------------------------
+                        # Feed JPEG directly into ffplay.
+                        # ------------------------------------------------
+
+                        try:
+
+                            ffplay.stdin.write(payload)
+                            ffplay.stdin.flush()
+
+                        except (
+                            BrokenPipeError,
+                            OSError,
+                        ):
+
+                            print()
+                            print(
+                                "ffplay closed its input."
+                            )
+
+                            break
+
+                        continue
+
+                    # ==================================================
+                    # AUDIO
+                    # ==================================================
+
+                    if packet_type == TYPE_AUDIO:
+
+                        print(
+                            "RX AUDIO:",
                             len(payload),
+                            "bytes"
                         )
+
+                        # We deliberately ignore audio for now.
+
+                        continue
+
+                    # ==================================================
+                    # PCM AUDIO
+                    # ==================================================
+
+                    if packet_type == TYPE_PCM:
 
                         print(
-                            "    first bytes:",
-                            payload[:32].hex(" ")
+                            "RX PCM:",
+                            len(payload),
+                            "bytes"
                         )
 
+                        # We deliberately ignore audio for now.
 
-                        # ==================================================
-                        # KEEPALIVE
-                        #
-                        # Browser source:
-                        #
-                        # const e = JSON.stringify({
-                        #     code: 4,
-                        #     unixTimer: Date.now()
-                        # });
-                        #
-                        # p(301, e)
-                        #
-                        # ==================================================
+                        continue
 
-                        now = time.monotonic()
+                    # ==================================================
+                    # COMMAND RESPONSE
+                    # ==================================================
 
-                        if now - last_keepalive >= 8:
+                    if packet_type == TYPE_COMMAND:
 
-                            keepalive = json.dumps(
-                                {
-                                    "code": 4,
-                                    "unixTimer": int(
-                                        time.time() * 1000
-                                    ),
-                                },
-                                separators=(",", ":"),
-                            )
+                        try:
 
-                            await ws.send(
-                                make_packet(
-                                    TYPE_COMMAND,
-                                    keepalive,
-                                )
+                            text = payload.decode(
+                                "utf-8",
+                                errors="replace",
                             )
 
                             print(
-                                "TX KEEPALIVE:",
-                                keepalive
+                                "RX COMMAND:",
+                                text
                             )
 
-                            last_keepalive = now
+                        except Exception as e:
 
-                finally:
+                            print(
+                                "RX COMMAND decode error:",
+                                repr(e)
+                            )
 
-                    watchdog_task.cancel()
+                        continue
 
-                    try:
-                        await watchdog_task
-                    except asyncio.CancelledError:
-                        pass
+                    # ==================================================
+                    # UNKNOWN PACKET
+                    # ==================================================
 
+                    print(
+                        "RX UNKNOWN PACKET:",
+                        "type=",
+                        packet_type,
+                        "length=",
+                        len(payload),
+                    )
+
+                    print(
+                        "    first bytes:",
+                        payload[:32].hex(" ")
+                    )
+
+                    # ==================================================
+                    # KEEPALIVE
+                    #
+                    # Browser source:
+                    #
+                    # const e = JSON.stringify({
+                    #     code: 4,
+                    #     unixTimer: Date.now()
+                    # });
+                    #
+                    # p(301, e)
+                    #
+                    # ==================================================
+
+                    now = time.monotonic()
+
+                    if now - last_keepalive >= 8:
+
+                        keepalive = json.dumps(
+                            {
+                                "code": 4,
+                                "unixTimer": int(
+                                    time.time() * 1000
+                                ),
+                            },
+                            separators=(",", ":"),
+                        )
+
+                        await ws.send(
+                            make_packet(
+                                TYPE_COMMAND,
+                                keepalive,
+                            )
+                        )
+
+                        print(
+                            "TX KEEPALIVE:",
+                            keepalive
+                        )
+
+                        last_keepalive = now
+
+        except websockets.exceptions.ConnectionClosed as e:
+
+            # ----------------------------------------------------
+            # If the watchdog deliberately closed the connection,
+            # don't treat it as a separate unexpected failure.
+            # ----------------------------------------------------
+
+            if not watchdog_triggered:
+
+                print()
+                print(
+                    "WebSocket closed:",
+                    f"code={e.code}, reason={e.reason}"
+                )
 
         except Exception as e:
 
-            if not reconnecting:
+            print()
 
-                print()
-                print("==============================================")
-                print("CONNECTION ERROR")
-                print("==============================================")
+            print("==============================================")
+            print("CONNECTION ERROR")
+            print("==============================================")
 
-                print(
-                    type(e).__name__,
-                    ":",
-                    str(e),
-                )
+            print(
+                type(e).__name__,
+                ":",
+                str(e),
+            )
 
-                print()
-
+            print()
 
         finally:
+
+            if watchdog_task is not None:
+
+                watchdog_task.cancel()
+
+                try:
+                    await watchdog_task
+                except asyncio.CancelledError:
+                    pass
 
             if ffplay is not None:
 
@@ -563,10 +552,8 @@ async def main():
                     pass
 
                 try:
-
                     ffplay.terminate()
                     ffplay.wait(timeout=2)
-
                 except Exception:
 
                     try:
@@ -574,13 +561,13 @@ async def main():
                     except Exception:
                         pass
 
-        # ========================================================
-        # If the connection ended for ANY reason, start it again.
-        # ========================================================
+            print()
+            print("Restarting connection...")
+            print()
 
-        print()
-        print("Restarting connection...")
-        print()
+        # ----------------------------------------------------
+        # Small delay before reconnecting.
+        # ----------------------------------------------------
 
         await asyncio.sleep(1)
 
