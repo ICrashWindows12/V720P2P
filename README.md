@@ -18,13 +18,9 @@ You can open this up in a text editor or a terminal text editor and paste everyt
 
 `
 DEVICE_ID = ""
-
-# This is the CAMERA/P2P token (tarPwd), NOT the V720 account JWT.
 CAMERA_TOKEN = ""
-
 SERVER_IP = ""
 SERVER_PORT = ""
-
 `
 
 # Running the script
