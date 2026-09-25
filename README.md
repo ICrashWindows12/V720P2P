@@ -1,5 +1,5 @@
 # V720P2P
-A python script that will pull your V720 camera feed from the p2p servers.
+A python script that will pull your V720 camera feed from the naxclow p2p servers
 And the cameras I am referring to are https://naxclow.com
 # Editing the file
 You can open this up in a text editor or a terminal text editor and paste everything
@@ -15,12 +15,12 @@ You can open this up in a text editor or a terminal text editor and paste everyt
 8. Click payload then you will see device ID, token, server IP and Port
 9. Input into the v720wss.py in the blank fields
 
-`
+``
 DEVICE_ID = ""
 CAMERA_TOKEN = ""
 SERVER_IP = ""
 SERVER_PORT = ""
-`
+``
 
 # Running the script
 It requires websockets so run 
@@ -32,3 +32,6 @@ Run with
 ```
 python v720wss.py
 ```
+# NOTES
+- Video works but audio does not, I am working on it
+- This script may not work in the future so I will update it if it changes how they stream it anytime soon.
