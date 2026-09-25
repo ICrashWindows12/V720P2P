@@ -23,12 +23,19 @@ SERVER_PORT = ""
 ``
 
 # Running the script
-It requires websockets so run 
+It requires websockets and ffmpeg so run 
 ```
 pip install websockets
 ```
+For macOS 
+```
+brew install ffmpeg
+```
 
-Run with 
+Linux
+```
+apt install ffmpeg
+```
 ```
 python v720wss.py
 ```
