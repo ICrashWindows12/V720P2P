@@ -28,6 +28,11 @@ SERVER_PORT = ""
 ```
 
 # Running the script
-It requires websockets so run `pip install websockets`
+It requires websockets so run `
+pip install websockets
+`
 
-Run with ```python v720wss.py```
+Run with 
+```
+python v720wss.py
+```
