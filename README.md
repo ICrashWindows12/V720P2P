@@ -1,7 +1,6 @@
 # V720P2P
 A python script that will pull your V720 camera feed from the p2p servers
-
-
+And the cameras I am referring to are https://naxclow.com
 # Editing the file
 You can open this up in a text editor or a terminal text editor and paste everything
 
