@@ -58,3 +58,4 @@ python v720wss.py
 - You cannot access any other cameras you don't have access to unless they share it with you.
 - Only one person can view at a time unless you create a server which then broadcasts this
 - Very bad quality, only 10fps just like the app, don't expect too much. and normally it is 640x480 but this is just stretched out a little bit
+- I noticed that the p2p might not work sometimes as well as when you run the script you will get not connected to p2p server in RX Status so if you cannot connect to it you know that the servers don't work properly, as also seen in the h5v720app.naxclowyun.com site.
